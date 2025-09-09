@@ -1,5 +1,4 @@
-// Halloween 2025: Escape the Haunted House
-// Core game engine in JavaScript
+// Halloween 2025 - Escape (Google Doodle Inspired)
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -7,49 +6,51 @@ const ctx = canvas.getContext("2d");
 const WIDTH = canvas.width;
 const HEIGHT = canvas.height;
 
+const MAP_WIDTH = 1600;
+const MAP_HEIGHT = 1200;
+
+const DETECTION_RADIUS = 150; // distance ghosts detect you
+const SPRINT_SPEED = 5;
+const WALK_SPEED = 2.5;
+
 // --- ASSETS ---
-// Replace below with your image paths in `/images/` folder
 const survivorImg = new Image();
-survivorImg.src = "images/Player-removebg-preview.png";   // <- change to your survivor sprite
+survivorImg.src = "images/survivor.png"; // update with your survivor sprite
 const ghostImg = new Image();
-ghostImg.src = "images/ghost-removebg-preview.png";         // <- change to your ghost sprite
+ghostImg.src = "images/ghost.png";       // update with your ghost sprite
 const powerupImg = new Image();
-powerupImg.src = "images/powerup-removebg-preview.png";     // <- change to your powerup (shield)
+powerupImg.src = "images/powerup.png";   // update with your powerup sprite
+
+// --- INPUT ---
+const input = {};
+document.addEventListener("keydown", e => input[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => input[e.key.toLowerCase()] = false);
 
 // --- GAME OBJECTS ---
 
 class Player {
-  constructor(x, y, id) {
+  constructor(x, y) {
     this.x = x;
     this.y = y;
     this.size = 32;
-    this.speed = 3;
+    this.speed = WALK_SPEED;
     this.lives = 3;
-    this.id = id;
-    this.poweredUp = false;
-    this.color = "blue";
+    this.sprinting = false;
   }
-  move(input) {
-    if (input["ArrowUp"]) this.y -= this.speed;
-    if (input["ArrowDown"]) this.y += this.speed;
-    if (input["ArrowLeft"]) this.x -= this.speed;
-    if (input["ArrowRight"]) this.x += this.speed;
+  update() {
+    this.sprinting = input["shift"] ? true : false;
+    this.speed = this.sprinting ? SPRINT_SPEED : WALK_SPEED;
 
-    this.x = Math.max(0, Math.min(WIDTH - this.size, this.x));
-    this.y = Math.max(0, Math.min(HEIGHT - this.size, this.y));
+    if (input["w"] || input["arrowup"]) this.y -= this.speed;
+    if (input["s"] || input["arrowdown"]) this.y += this.speed;
+    if (input["a"] || input["arrowleft"]) this.x -= this.speed;
+    if (input["d"] || input["arrowright"]) this.x += this.speed;
+
+    this.x = Math.max(0, Math.min(MAP_WIDTH - this.size, this.x));
+    this.y = Math.max(0, Math.min(MAP_HEIGHT - this.size, this.y));
   }
-  draw() {
-    if (survivorImg.complete) {
-      ctx.drawImage(survivorImg, this.x, this.y, this.size, this.size);
-    } else {
-      ctx.fillStyle = this.color;
-      ctx.fillRect(this.x, this.y, this.size, this.size);
-    }
-    if(this.poweredUp){
-      ctx.strokeStyle = "yellow";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(this.x, this.y, this.size, this.size);
-    }
+  draw(cameraX, cameraY) {
+    ctx.drawImage(survivorImg, this.x - cameraX, this.y - cameraY, this.size, this.size);
   }
 }
 
@@ -58,38 +59,46 @@ class Ghost {
     this.x = x;
     this.y = y;
     this.size = 32;
-    this.speed = 2;
-    this.abilityCooldown = 0;
-    this.color = "red";
+    this.speed = 1.5;
+    this.state = "wander"; // "wander" or "chase"
+    this.target = null;
+    this.dx = Math.random()*2-1;
+    this.dy = Math.random()*2-1;
+    this.changeDirTimer = 0;
   }
-  update(players) {
-    // Basic chase AI
-    let target = players[0]; 
-    let minDist = Infinity;
-    for (let p of players) {
-      if (p.lives > 0) {
-        let d = Math.hypot(p.x - this.x, p.y - this.y);
-        if (d < minDist) {
-          minDist = d;
-          target = p;
-        }
-      }
+  update(player) {
+    let dist = Math.hypot(player.x - this.x, player.y - this.y);
+
+    if (dist < DETECTION_RADIUS && player.sprinting) {
+      this.state = "chase";
+      this.target = player;
+    } else if (this.state === "chase" && dist > DETECTION_RADIUS * 2) {
+      this.state = "wander";
     }
-    if (target) {
-      if (target.x > this.x) this.x += this.speed;
-      if (target.x < this.x) this.x -= this.speed;
-      if (target.y > this.y) this.y += this.speed;
-      if (target.y < this.y) this.y -= this.speed;
-    }
-    if (this.abilityCooldown > 0) this.abilityCooldown--;
-  }
-  draw() {
-    if (ghostImg.complete) {
-      ctx.drawImage(ghostImg, this.x, this.y, this.size, this.size);
+
+    if (this.state === "chase" && this.target) {
+      let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+      this.x += Math.cos(angle) * (this.speed + 0.8);
+      this.y += Math.sin(angle) * (this.speed + 0.8);
     } else {
-      ctx.fillStyle = this.color;
-      ctx.fillRect(this.x, this.y, this.size, this.size);
+      // wander movement
+      if (this.changeDirTimer <= 0) {
+        this.dx = Math.random()*2-1;
+        this.dy = Math.random()*2-1;
+        this.changeDirTimer = 120; // change dir every 2 sec
+      } else {
+        this.changeDirTimer--;
+      }
+      this.x += this.dx * this.speed;
+      this.y += this.dy * this.speed;
     }
+
+    // map bounds
+    this.x = Math.max(0, Math.min(MAP_WIDTH - this.size, this.x));
+    this.y = Math.max(0, Math.min(MAP_HEIGHT - this.size, this.y));
+  }
+  draw(cameraX, cameraY) {
+    ctx.drawImage(ghostImg, this.x - cameraX, this.y - cameraY, this.size, this.size);
   }
 }
 
@@ -98,76 +107,74 @@ class PowerUp {
     this.x = x;
     this.y = y;
     this.size = 24;
-    this.type = type; // "shield", "speed", "rage"
+    this.type = type;
+    this.active = true;
   }
-  draw() {
-    if (powerupImg.complete) {
-      ctx.drawImage(powerupImg, this.x, this.y, this.size, this.size);
-    } else {
-      ctx.fillStyle = "gold";
-      ctx.fillRect(this.x, this.y, this.size, this.size);
-    }
+  draw(cameraX, cameraY) {
+    if (!this.active) return;
+    ctx.drawImage(powerupImg, this.x - cameraX, this.y - cameraY, this.size, this.size);
   }
 }
-// --- SETUP ---
 
-const input = {};
-const players = [new Player(100, 100, 0)];
-const ghosts = [new Ghost(400, 300), new Ghost(600, 500), new Ghost(800, 100)];
-const powerups = [new PowerUp(300, 200, "shield"), new PowerUp(700, 400, "rage")];
+// --- GAME STATE ---
 
-// --- EVENT HANDLING ---
-document.addEventListener("keydown", e => input[e.key] = true);
-document.addEventListener("keyup", e => input[e.key] = false);
+const player = new Player(200, 200);
+const ghosts = [new Ghost(500, 400), new Ghost(900, 800), new Ghost(1200, 600)];
+const powerups = [new PowerUp(300, 300, "shield"), new PowerUp(1100, 900, "speed")];
 
-// --- MAIN LOOP ---
+// CAMERA system
+function getCamera() {
+  let cameraX = player.x - WIDTH/2;
+  let cameraY = player.y - HEIGHT/2;
+
+  cameraX = Math.max(0, Math.min(MAP_WIDTH - WIDTH, cameraX));
+  cameraY = Math.max(0, Math.min(MAP_HEIGHT - HEIGHT, cameraY));
+
+  return {cameraX, cameraY};
+}
+
+// --- LOOP ---
 function update() {
-  // Update player
-  for (let p of players) {
-    if (p.lives > 0) p.move(input);
-  }
+  player.update();
+  for(let g of ghosts) g.update(player);
 
-  // Update ghosts
-  for (let g of ghosts) g.update(players);
-
-  // Collision: ghost hits player
+  // collisions
   for (let g of ghosts) {
-    for (let p of players) {
-      if (collide(g, p) && !p.poweredUp) {
-        p.lives--;
-        p.x = 50; p.y = 50; // reset position
-      }
+    if (collide(g, player)) {
+      player.lives--;
+      player.x = 200; player.y = 200; // reset
     }
   }
 
-  // Powerup pickup
-  for (let i = powerups.length - 1; i >= 0; i--) {
-    let pu = powerups[i];
-    for (let p of players) {
-      if(collide(pu, p)){
-        if(pu.type === "shield") p.poweredUp = true;
-        if(pu.type === "speed") p.speed += 2;
-        if(pu.type === "rage"){ // ghost buff
-          for (let g of ghosts) g.speed += 1;
-        }
-        powerups.splice(i, 1);
+  for (let pu of powerups) {
+    if (pu.active && collide(pu, player)) {
+      if (pu.type === "shield") {
+        player.lives += 1;
+      } else if (pu.type === "speed") {
+        player.speed += 1.5;
       }
+      pu.active = false;
     }
   }
 }
 
 function draw() {
-  ctx.fillStyle = "#1e1e2f";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const {cameraX, cameraY} = getCamera();
 
-  for (let p of players) p.draw();
-  for (let g of ghosts) g.draw();
-  for (let pu of powerups) pu.draw();
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0,0,WIDTH,HEIGHT);
 
-  // HUD
+  // map decorations
+  ctx.strokeStyle = "purple";
+  ctx.strokeRect(-cameraX, -cameraY, MAP_WIDTH, MAP_HEIGHT);
+
+  player.draw(cameraX, cameraY);
+  for(let g of ghosts) g.draw(cameraX, cameraY);
+  for(let pu of powerups) pu.draw(cameraX, cameraY);
+
   ctx.fillStyle = "white";
-  ctx.font = "20px Arial";
-  ctx.fillText("Lives: " + players[0].lives, 20, 30);
+  ctx.font = "18px Arial";
+  ctx.fillText("Lives: " + player.lives, 20, 30);
 }
 
 function gameLoop() {
@@ -177,8 +184,8 @@ function gameLoop() {
 }
 gameLoop();
 
-// --- COLLISION HELPER ---
-function collide(a, b){
+// --- HELPER ---
+function collide(a,b){
   return a.x < b.x + b.size &&
          a.x + a.size > b.x &&
          a.y < b.y + b.size &&
