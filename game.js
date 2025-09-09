@@ -10,11 +10,11 @@ const HEIGHT = canvas.height;
 // --- ASSETS ---
 // Replace below with your image paths in `/images/` folder
 const survivorImg = new Image();
-survivorImg.src = "images/survivor.png";   // <- change to your survivor sprite
+survivorImg.src = "images/Player-removebg-preview.png";   // <- change to your survivor sprite
 const ghostImg = new Image();
-ghostImg.src = "images/ghost.png";         // <- change to your ghost sprite
+ghostImg.src = "images/ghost-removebg-preview.png";         // <- change to your ghost sprite
 const powerupImg = new Image();
-powerupImg.src = "images/powerup.png";     // <- change to your powerup (shield)
+powerupImg.src = "images/powerup-removebg-preview.png";     // <- change to your powerup (shield)
 
 // --- GAME OBJECTS ---
 
