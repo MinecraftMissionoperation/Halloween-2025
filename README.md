@@ -42,10 +42,6 @@ This project is based on the fun and suspenseful mechanics of the Google Doodle 
 
 Contributions are welcome! Please open issues or pull requests for suggestions, bug fixes, or new features.
 
-## License
-
-[MIT](LICENSE) (or specify your license of choice)
-
 ---
 
 Happy haunting!
